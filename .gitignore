@@ -8,3 +8,7 @@ build/
 .DS_Store
 coverage/
 .vite/
+
+# Firebase Admin service-account key (never commit)
+ctk-fb-adminsdk.json
+**/ctk-fb-adminsdk.json

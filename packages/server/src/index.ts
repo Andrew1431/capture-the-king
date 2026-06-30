@@ -1,13 +1,15 @@
 import { createServer } from 'node:http'
 import { Server } from 'socket.io'
-import { nanoid } from 'nanoid'
 import type { GameOverPayload, HandshakeAuth } from '@ctk/protocol'
+import { initAuth, verifyToken } from './auth.js'
 import { applyPlayerMove, seatColor, snapshotFor } from './game.js'
 import { joinQueue, leaveQueue, seatSocket, type AppServer } from './matchmaking.js'
 import { MemoryStore, type GameRecord } from './store.js'
 
 const PORT = Number(process.env.PORT ?? 8080)
 const store = new MemoryStore()
+
+initAuth()
 
 const httpServer = createServer((req, res) => {
   if (req.url === '/health' || req.url === '/') {
@@ -24,17 +26,23 @@ const io: AppServer = new Server(httpServer, {
   cors: { origin: process.env.WEB_ORIGIN ?? '*' },
 })
 
-/** Resolve a guest identity from the handshake (real auth arrives in M3). */
-function identify(auth: Partial<HandshakeAuth> | undefined): HandshakeAuth {
-  const uid = auth?.uid?.trim() || `guest-${nanoid(8)}`
-  const name = auth?.name?.trim() || `Guest-${Math.floor(1000 + Math.random() * 9000)}`
-  return { uid, name }
-}
+// Verify the Firebase ID token on the handshake; reject the socket if it's missing
+// or invalid. uid/name on socket.data are the authority for everything downstream.
+io.use(async (socket, next) => {
+  const { token } = (socket.handshake.auth ?? {}) as Partial<HandshakeAuth>
+  if (!token) return next(new Error('auth-required'))
+  try {
+    const user = await verifyToken(token)
+    socket.data.uid = user.uid
+    socket.data.name = user.name
+    next()
+  } catch {
+    next(new Error('auth-invalid'))
+  }
+})
 
 io.on('connection', async (socket) => {
-  const { uid, name } = identify(socket.handshake.auth as Partial<HandshakeAuth>)
-  socket.data.uid = uid
-  socket.data.name = name
+  const { uid, name } = socket.data
 
   // Reconnect: if this player has a live game, re-seat them and resend the state.
   const existing = await store.findActiveGameByUid(uid)

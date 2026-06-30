@@ -61,15 +61,14 @@ export interface InterServerEvents {
   ping: () => void
 }
 
-/** Per-socket data the server attaches on connect (guest identity for now; auth in M3). */
+/** Per-socket data the server attaches on connect, derived from the verified token. */
 export interface SocketData {
   uid: string
   name: string
   gameId?: string
 }
 
-/** Handshake auth the client sends (guest identity until M3 Firebase auth). */
+/** Handshake auth the client sends: a Firebase ID token verified by the server. */
 export interface HandshakeAuth {
-  uid: string
-  name: string
+  token: string
 }
