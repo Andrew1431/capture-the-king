@@ -152,7 +152,7 @@ impersonate it through GitHub's OIDC token:
 ```sh
 PROJECT_ID=capture-the-king
 PROJECT_NUM=1054289488256
-REPO=andrew1431/capture-the-king
+REPO=Andrew1431/capture-the-king   # exact case — GitHub's OIDC claim is case-sensitive
 gcloud config set project $PROJECT_ID
 gcloud services enable iamcredentials.googleapis.com sts.googleapis.com
 

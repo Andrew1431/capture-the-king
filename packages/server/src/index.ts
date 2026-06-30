@@ -18,6 +18,14 @@ import { MemoryStore, type GameRecord } from './store.js'
 const PORT = Number(process.env.PORT ?? 8080)
 const store = new MemoryStore()
 
+// Force-close any socket that goes this long without sending a client event, so an
+// abandoned/idle browser tab can't pin a Cloud Run instance (and keep billing)
+// indefinitely. The timer resets on every inbound event (move, queue:join, …).
+// disconnect(true) is server-initiated, so socket.io-client will NOT auto-reconnect
+// while idle; the next user action reconnects and resumeGame() restores any game.
+// Tune freely — lower is cheaper but cuts off longer think-times mid-game.
+const IDLE_TIMEOUT_MS = 2 * 60_000
+
 initAuth()
 
 const httpServer = createServer((req, res) => {
@@ -52,6 +60,15 @@ io.use(async (socket, next) => {
 
 io.on('connection', async (socket) => {
   const { uid, name } = socket.data
+
+  // Idle watchdog: rearm on any inbound event; fire => server-initiated close.
+  let idleTimer: ReturnType<typeof setTimeout>
+  const armIdle = () => {
+    clearTimeout(idleTimer)
+    idleTimer = setTimeout(() => socket.disconnect(true), IDLE_TIMEOUT_MS)
+  }
+  socket.onAny(armIdle)
+  armIdle()
 
   // Reconnect: if this player has a live game, re-seat them and resend the state.
   const existing = await store.findActiveGameByUid(uid)
@@ -122,6 +139,7 @@ io.on('connection', async (socket) => {
   })
 
   socket.on('disconnect', async () => {
+    clearTimeout(idleTimer)
     await leaveQueue(store, uid)
     await cancelInvite(store, uid)
     // Keep the live game alive for a reconnect grace; just clear the socket binding.

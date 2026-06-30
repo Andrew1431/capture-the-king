@@ -162,7 +162,12 @@ export function useGameSession(): GameSession {
     socket.on('game:start', (snapshot) => dispatch({ type: 'start', snapshot }))
     socket.on('state', ({ state: s, lastMove }) => dispatch({ type: 'state', state: s, lastMove }))
     socket.on('invite:waiting', ({ code }) => dispatch({ type: 'invite-code', code }))
-    socket.on('game:over', (result) => dispatch({ type: 'over', result }))
+    socket.on('game:over', (result) => {
+      // The result modal needs no live socket — close it now so a lingering
+      // "game over" tab can't keep a server instance (and billing) alive.
+      dispatch({ type: 'over', result })
+      socket.disconnect()
+    })
     socket.on('error:msg', ({ message }) => dispatch({ type: 'error', message }))
 
     return () => {
@@ -220,11 +225,17 @@ export function useGameSession(): GameSession {
   }, [state.inviteCode])
 
   const sendMove = useCallback((from: number, to: number, promo?: PieceType) => {
-    socketRef.current?.emit('move', { from, to, promo })
+    const socket = socketRef.current
+    if (!socket) return
+    if (!socket.connected) socket.connect() // recover from an idle close; emit buffers until ready
+    socket.emit('move', { from, to, promo })
   }, [])
 
   const resign = useCallback(() => {
-    socketRef.current?.emit('resign')
+    const socket = socketRef.current
+    if (!socket) return
+    if (!socket.connected) socket.connect()
+    socket.emit('resign')
   }, [])
 
   const newGame = useCallback(() => {
