@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { movesFrom, type PieceType } from '@ctk/engine'
 import { Board } from '../board/Board'
-import { GLYPH } from '../board/pieces'
+import { PIECE_SVG } from '../board/pieces'
 import type { GameSession } from '../net/useGameSession'
 import { Button, Card, Heading, Modal, Stack, Text } from '../ui'
 
@@ -33,6 +33,20 @@ export function GameView({ session }: GameViewProps) {
   const targetSquares = new Set(targets.map((m) => m.to))
   const opponent = game.color === 'w' ? game.players.b : game.players.w
 
+  // Attempt a move from->to; returns false if no legal move connects them.
+  function tryMove(from: number, to: number): boolean {
+    if (!myTurn || !game) return false
+    const move = movesFrom(game.state, from).find((m) => m.to === to)
+    if (!move) return false
+    if (move.flags === 'promo') {
+      setPromo({ from, to })
+      return true
+    }
+    sendMove(from, to)
+    setSelected(null)
+    return true
+  }
+
   function onSquareClick(index: number) {
     if (!myTurn || !game) return
     const piece = game.state.board[index]
@@ -49,17 +63,12 @@ export function GameView({ session }: GameViewProps) {
       setSelected(index)
       return
     }
-    const move = targets.find((m) => m.to === index)
-    if (!move) {
-      setSelected(null)
-      return
-    }
-    if (move.flags === 'promo') {
-      setPromo({ from: selected, to: index })
-      return
-    }
-    sendMove(selected, index)
-    setSelected(null)
+    if (!tryMove(selected, index)) setSelected(null)
+  }
+
+  // Illegal drops leave the selection intact so its move hints stay visible.
+  function onDragMove(from: number, to: number) {
+    tryMove(from, to)
   }
 
   function choosePromo(pt: PieceType) {
@@ -90,6 +99,8 @@ export function GameView({ session }: GameViewProps) {
         targets={targetSquares}
         lastMove={game.lastMove}
         onSquareClick={onSquareClick}
+        onSelect={setSelected}
+        onDragMove={onDragMove}
         interactive={myTurn}
       />
 
@@ -113,9 +124,9 @@ export function GameView({ session }: GameViewProps) {
                     key={pt}
                     type="button"
                     onClick={() => choosePromo(pt)}
-                    className="flex h-16 w-16 items-center justify-center rounded-xl bg-surface-2 text-4xl text-zinc-50 transition-colors hover:bg-border"
+                    className="flex h-16 w-16 items-center justify-center rounded-xl bg-surface-2 transition-colors hover:bg-border"
                   >
-                    {GLYPH[pt]}
+                    <img src={PIECE_SVG[game.color][pt]} alt={pt} draggable={false} className="h-11 w-11" />
                   </button>
                 ))}
               </Stack>
