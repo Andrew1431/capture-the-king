@@ -83,30 +83,52 @@ managed TLS cert. Cert provisioning takes a few minutes. Verify:
 curl https://ws.capturetheking.hartwigdev.ca/health
 ```
 
-## 3. Web → Cloudflare Pages
-Dashboard → Pages → Create → connect this Git repo. Settings:
-- Framework preset: **None**
-- Build command:
-  `pnpm install && pnpm --filter @ctk/engine build && pnpm --filter @ctk/protocol build && pnpm --filter @ctk/web build`
-- Build output directory: `packages/web/dist`
-- Root directory: repo root (leave blank)
-- Node: 20+ (set `NODE_VERSION=22` env var if needed)
+## 3. Web → Cloudflare Pages (via GitHub Actions)
+The web app deploys through `.github/workflows/deploy-web.yml` (Direct Upload with
+wrangler). It runs on push to `master` (or manually from the Actions tab). No
+Cloudflare Git integration / dashboard build config is used.
 
-Environment variables (Production) — copy the `VITE_FIREBASE_*` values from
-`packages/web/.env`, and set the server URL to the `ws.` domain:
-```
-VITE_SERVER_URL=https://ws.capturetheking.hartwigdev.ca
-VITE_FIREBASE_API_KEY=…
-VITE_FIREBASE_AUTH_DOMAIN=…
-VITE_FIREBASE_PROJECT_ID=capture-the-king
-VITE_FIREBASE_STORAGE_BUCKET=…
-VITE_FIREBASE_MESSAGING_SENDER_ID=…
-VITE_FIREBASE_APP_ID=…
-```
-(The `VITE_FIREBASE_*` keys are public — safe in the client bundle.)
+One-time setup:
 
-Then map the custom domain `capturetheking.hartwigdev.ca` to the Pages project
-(Pages → Custom domains). Cloudflare manages that DNS automatically.
+a. **Create the Pages project** (so the workflow has something to deploy into):
+   ```
+   npx wrangler login            # opens browser, authorizes wrangler
+   npx wrangler pages project create capture-the-king --production-branch=master
+   ```
+   (Or Cloudflare dashboard → Workers & Pages → Create → Pages → Direct Upload,
+   name it exactly `capture-the-king`.)
+
+b. **Create a Cloudflare API token** for CI:
+   Cloudflare dashboard → My Profile → API Tokens → Create Token →
+   template **"Edit Cloudflare Workers"** (or a custom token with
+   *Account → Cloudflare Pages → Edit*). Copy the token.
+
+c. **Find your Account ID:** Cloudflare dashboard → Workers & Pages → right sidebar
+   shows "Account ID". Copy it.
+
+d. **Add GitHub repo secrets** (repo → Settings → Secrets and variables → Actions
+   → New repository secret). Values for `VITE_FIREBASE_*` come from
+   `packages/web/.env` (public keys, safe in the client bundle):
+   ```
+   CLOUDFLARE_API_TOKEN
+   CLOUDFLARE_ACCOUNT_ID
+   VITE_FIREBASE_API_KEY
+   VITE_FIREBASE_AUTH_DOMAIN
+   VITE_FIREBASE_PROJECT_ID            # capture-the-king
+   VITE_FIREBASE_STORAGE_BUCKET
+   VITE_FIREBASE_MESSAGING_SENDER_ID
+   VITE_FIREBASE_APP_ID
+   ```
+   (`VITE_SERVER_URL` is set in the workflow — currently the Cloud Run URL so the
+   site works before the `ws.` mapping exists; switch it to the `ws.` domain there
+   once step 2 is done.)
+
+e. **Trigger it:** Actions tab → "Deploy web" → Run workflow (or just push). First
+   run publishes to `https://capture-the-king.pages.dev`.
+
+f. **Custom domain:** Cloudflare → Workers & Pages → `capture-the-king` → Custom
+   domains → add `capturetheking.hartwigdev.ca`. Cloudflare manages that DNS record
+   automatically.
 
 ## 4. Firebase Auth — authorized domains
 Firebase console → Authentication → Settings → Authorized domains: add
@@ -114,7 +136,7 @@ Firebase console → Authentication → Settings → Authorized domains: add
 
 ## 5. Cost guardrail (recommended)
 GCP console → Billing → Budgets & alerts: set a small budget + email alert on
-`capture-the-king` so a traffic spike can't surprise-bill. (`max-instances=4`
+`capture-the-king` so a traffic spike can't surprise-bill. (`max-instances=1`
 already caps blast radius.)
 
 ---

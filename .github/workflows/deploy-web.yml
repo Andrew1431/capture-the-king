@@ -1,0 +1,55 @@
+name: Deploy web
+
+# Builds the mobile-first SPA and deploys it to Cloudflare Pages (Direct Upload).
+# Runs on every push to master that touches the web app or its workspace deps,
+# and can be triggered by hand from the Actions tab ("Run workflow").
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'packages/web/**'
+      - 'packages/engine/**'
+      - 'packages/protocol/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/deploy-web.yml'
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4 # reads packageManager (pnpm@10.15.0) from package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build web bundle
+        env:
+          # The game server. Currently the Cloud Run URL so the site works before the
+          # custom domain mapping exists. Switch to https://ws.capturetheking.hartwigdev.ca
+          # once that DNS/cert is live (see LIVE_STATUS.md), then push.
+          VITE_SERVER_URL: https://ctk-server-1054289488256.us-central1.run.app
+          # Firebase web config — public values, injected from repo secrets at build.
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+        run: |
+          pnpm --filter @ctk/engine build
+          pnpm --filter @ctk/protocol build
+          pnpm --filter @ctk/web build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy packages/web/dist --project-name=capture-the-king --branch=master
