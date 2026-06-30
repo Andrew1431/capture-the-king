@@ -1,0 +1,64 @@
+name: Deploy server
+
+# Builds the server image (Cloud Build → Artifact Registry) and deploys it to
+# Cloud Run. Runs on every push to master that touches the server or its workspace
+# deps, and can be triggered by hand from the Actions tab ("Run workflow").
+#
+# Auth is keyless via Workload Identity Federation (OIDC) — no service-account key
+# is stored in GitHub. See LIVE_STATUS.md §"Server CI" for the one-time GCP setup
+# and the repo variables this expects.
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'packages/server/**'
+      - 'packages/engine/**'
+      - 'packages/protocol/**'
+      - 'pnpm-lock.yaml'
+      - 'cloudbuild.yaml'
+      - '.github/workflows/deploy-server.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write # required for Workload Identity Federation (OIDC)
+
+env:
+  PROJECT_ID: capture-the-king
+  REGION: us-central1
+  SERVICE: ctk-server
+  IMAGE: us-central1-docker.pkg.dev/capture-the-king/ctk/server:latest
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          # Both values come from repo variables (Settings → Secrets and variables
+          # → Actions → Variables), populated by the one-time WIF setup.
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build image (Cloud Build → Artifact Registry)
+        run: gcloud builds submit --project "$PROJECT_ID" --config cloudbuild.yaml
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "$SERVICE" \
+            --project "$PROJECT_ID" \
+            --image "$IMAGE" \
+            --region "$REGION" \
+            --allow-unauthenticated \
+            --port 8080 \
+            --min-instances 0 \
+            --max-instances 1 \
+            --concurrency 800 \
+            --session-affinity \
+            --timeout 3600 \
+            --set-env-vars WEB_ORIGIN=https://capturetheking.hartwigdev.ca

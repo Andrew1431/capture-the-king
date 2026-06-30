@@ -1,7 +1,7 @@
 # Capture the King — Live / Deploy Status
 
 Operational runbook: what's deployed, where, and the exact steps left to finish.
-Last updated: 2026-06-30.
+Last updated: 2026-06-30 (added server CI via Workload Identity Federation).
 
 ## Target URLs
 - Web (SPA): https://capturetheking.hartwigdev.ca  → Cloudflare Pages
@@ -139,6 +139,61 @@ GCP console → Billing → Budgets & alerts: set a small budget + email alert o
 `capture-the-king` so a traffic spike can't surprise-bill. (`max-instances=1`
 already caps blast radius.)
 
+## 6. Server CI — auto-deploy on push (one-time WIF setup)
+`.github/workflows/deploy-server.yml` runs Cloud Build + `gcloud run deploy` on
+every push to master touching the server/engine/protocol (or by hand from the
+Actions tab). It authenticates **keylessly** via Workload Identity Federation —
+no service-account key is stored in GitHub. WIF itself is free.
+
+Run these once (paste via `! <command>`; the IAM/identity commands need your
+owner login). They create a `gh-deployer` service account and let only this repo
+impersonate it through GitHub's OIDC token:
+
+```sh
+PROJECT_ID=capture-the-king
+PROJECT_NUM=1054289488256
+REPO=andrew1431/capture-the-king
+gcloud config set project $PROJECT_ID
+gcloud services enable iamcredentials.googleapis.com sts.googleapis.com
+
+# Deploy service account + the roles it needs to build & deploy
+gcloud iam service-accounts create gh-deployer --display-name="GitHub Actions deployer"
+SA=gh-deployer@$PROJECT_ID.iam.gserviceaccount.com
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA" --role="roles/run.admin"
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA" --role="roles/cloudbuild.builds.editor"
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA" --role="roles/storage.admin"
+# Let it deploy a service that RUNS AS the Cloud Run runtime SA
+gcloud iam service-accounts add-iam-policy-binding \
+  $PROJECT_NUM-compute@developer.gserviceaccount.com \
+  --member="serviceAccount:$SA" --role="roles/iam.serviceAccountUser"
+
+# Workload Identity pool + GitHub OIDC provider (locked to this one repo)
+gcloud iam workload-identity-pools create github --location=global --display-name="GitHub Actions"
+gcloud iam workload-identity-pools providers create-oidc github \
+  --location=global --workload-identity-pool=github --display-name="GitHub" \
+  --issuer-uri="https://token.actions.githubusercontent.com" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+  --attribute-condition="assertion.repository=='$REPO'"
+
+# Let this repo impersonate the deploy SA
+POOL=$(gcloud iam workload-identity-pools describe github --location=global --format="value(name)")
+gcloud iam service-accounts add-iam-policy-binding $SA \
+  --role=roles/iam.workloadIdentityUser \
+  --member="principalSet://iam.googleapis.com/$POOL/attribute.repository/$REPO"
+```
+
+Then wire the two values into the repo as **Actions variables** (not secrets —
+they're not sensitive):
+
+```sh
+PROVIDER=$(gcloud iam workload-identity-pools providers describe github \
+  --location=global --workload-identity-pool=github --format="value(name)")
+gh variable set GCP_WIF_PROVIDER --body "$PROVIDER"
+gh variable set GCP_DEPLOY_SA   --body "gh-deployer@capture-the-king.iam.gserviceaccount.com"
+```
+
+Trigger: Actions tab → "Deploy server" → Run workflow (or push a server change).
+
 ---
 
 # Quick smoke test once 1–4 are done
@@ -153,4 +208,5 @@ already caps blast radius.)
   players can never split across instances and fail to match. To scale past one
   instance, switch to the Redis store (PLAN §M7) and raise max-instances together.
 - Cold start wipes in-flight games (acceptable for v1; Redis store removes this).
-- No CI yet (`.github/` absent). Deploys are manual via the commands above.
+- CI: web via `deploy-web.yml`, server via `deploy-server.yml` (both on push to
+  master). The manual `gcloud` commands above still work for one-off deploys.
