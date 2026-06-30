@@ -1,44 +1,33 @@
-import { initialGameState } from '@ctk/engine'
-import { Board } from './board/Board'
-import { Button, Card, Container, Heading, Stack, Text } from './ui'
+import { useEffect } from 'react'
+import { GameView } from './app/GameView'
+import { Home } from './app/Home'
+import { Waiting } from './app/Waiting'
+import { useGameSession } from './net/useGameSession'
+import { Container } from './ui'
 
 export function App() {
-  const state = initialGameState()
+  const session = useGameSession()
+  const { error, dismissError } = session
+
+  useEffect(() => {
+    if (!error) return
+    const t = setTimeout(dismissError, 3000)
+    return () => clearTimeout(t)
+  }, [error, dismissError])
 
   return (
-    <Container className="py-8">
-      <Stack gap={8}>
-        <Stack gap={2} align="center" className="text-center">
-          <Heading level={1}>
-            Capture the <span className="text-brand">King</span>
-          </Heading>
-          <Text tone="muted">
-            No check. No checkmate. Take the enemy king and the game is yours.
-          </Text>
-        </Stack>
+    <Container className="py-6">
+      {session.phase === 'home' && <Home onPlay={session.play} />}
+      {session.phase === 'queueing' && <Waiting conn={session.conn} onCancel={session.cancel} />}
+      {(session.phase === 'playing' || session.phase === 'over') && <GameView session={session} />}
 
-        <Board state={state} />
-
-        <Stack gap={3}>
-          <Button size="lg" block>
-            Play
-          </Button>
-          <Button size="lg" variant="secondary" block>
-            Play a friend
-          </Button>
-        </Stack>
-
-        <Card>
-          <Stack gap={2}>
-            <Heading level={3}>The king-echo</Heading>
-            <Text size="sm" tone="muted">
-              Castling through danger is legal here — but it leaves a{' '}
-              <span className="text-board-mark">ghost king</span> on the squares your king fled,
-              capturable for one turn. Watch for the pulsing crowns.
-            </Text>
-          </Stack>
-        </Card>
-      </Stack>
+      {error && (
+        <div className="fixed inset-x-0 bottom-4 z-50 flex justify-center px-4">
+          <div className="rounded-xl border border-danger/40 bg-surface px-4 py-2 text-sm text-text shadow-lg">
+            {error}
+          </div>
+        </div>
+      )}
     </Container>
   )
 }

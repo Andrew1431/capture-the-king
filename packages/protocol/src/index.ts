@@ -1,38 +1,51 @@
-import type { GameState, GameStatus, Move, PieceType } from '@ctk/engine'
+import type { Color, GameState, GameStatus, Move, PieceType } from '@ctk/engine'
 
-/** What a winner/end looks like to clients. */
+/** Why a game ended, surfaced to clients. */
 export type GameOverReason = 'king-captured' | 'resign' | 'stalemate' | 'draw' | 'abandon'
 
-/** A player's public identity in a game. */
+/** A player's public identity within a game. */
 export interface PlayerInfo {
   uid: string
   name: string
 }
 
-/** Full snapshot sent on join/start and after every move (the board is tiny). */
+/** Full snapshot sent on game start / rejoin (the board is tiny, so it ships whole). */
 export interface GameSnapshot {
   gameId: string
   /** The seat this client occupies. */
-  color: 'w' | 'b'
+  color: Color
   players: { w: PlayerInfo; b: PlayerInfo }
   state: GameState
   lastMove: Move | null
 }
+
+export interface MovePayload {
+  from: number
+  to: number
+  promo?: PieceType
+}
+
+export interface GameOverPayload {
+  winner: Color | null
+  reason: GameOverReason
+  status: GameStatus
+}
+
+export type InviteJoinResult = { ok: true } | { ok: false; reason: 'not-found' | 'expired' | 'full' }
 
 export interface ClientToServerEvents {
   // Public matchmaking
   'queue:join': () => void
   'queue:leave': () => void
 
-  // Private invite-code matches
+  // Private invite-code matches (M4)
   'invite:create': (ack: (res: { code: string }) => void) => void
   'invite:cancel': (payload: { code: string }) => void
   'invite:join': (payload: { code: string }, ack: (res: InviteJoinResult) => void) => void
 
   // In-game
-  move: (payload: { from: number; to: number; promo?: PieceType }) => void
+  move: (payload: MovePayload) => void
   resign: () => void
-  'rejoin': (payload: { gameId: string }) => void
 }
 
 export interface ServerToClientEvents {
@@ -40,20 +53,23 @@ export interface ServerToClientEvents {
   'invite:waiting': (payload: { code: string }) => void
   'game:start': (snapshot: GameSnapshot) => void
   state: (payload: { state: GameState; lastMove: Move | null }) => void
-  'game:over': (payload: { winner: 'w' | 'b' | null; reason: GameOverReason; status: GameStatus }) => void
+  'game:over': (payload: GameOverPayload) => void
   'error:msg': (payload: { message: string }) => void
-}
-
-export type InviteJoinResult =
-  | { ok: true }
-  | { ok: false; reason: 'not-found' | 'expired' | 'full' }
-
-/** Per-socket data the server attaches after auth (M3). */
-export interface SocketData {
-  uid: string
-  name: string
 }
 
 export interface InterServerEvents {
   ping: () => void
+}
+
+/** Per-socket data the server attaches on connect (guest identity for now; auth in M3). */
+export interface SocketData {
+  uid: string
+  name: string
+  gameId?: string
+}
+
+/** Handshake auth the client sends (guest identity until M3 Firebase auth). */
+export interface HandshakeAuth {
+  uid: string
+  name: string
 }
