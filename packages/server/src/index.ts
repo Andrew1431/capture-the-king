@@ -12,6 +12,7 @@ import {
   resumeGame,
   type AppServer,
 } from './matchmaking.js'
+import { persistFinishedGame } from './persistence.js'
 import { MemoryStore, type GameRecord } from './store.js'
 
 const PORT = Number(process.env.PORT ?? 8080)
@@ -66,6 +67,12 @@ io.on('connection', async (socket) => {
 
   async function endGame(game: GameRecord, payload: GameOverPayload): Promise<void> {
     io.to(game.id).emit('game:over', payload)
+    // Persist before teardown; never let a Firestore error abort the game-over flow.
+    try {
+      await persistFinishedGame(game, payload)
+    } catch (err) {
+      console.error(`failed to persist game ${game.id}:`, err)
+    }
     await store.deleteGame(game.id)
     io.in(game.id).socketsLeave(game.id)
   }

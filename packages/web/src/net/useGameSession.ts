@@ -15,6 +15,8 @@ export interface ActiveGame {
   players: { w: PlayerInfo; b: PlayerInfo }
   state: GameState
   lastMove: Move | null
+  /** Full ordered move history of this game, for the move list. */
+  moves: Move[]
 }
 
 /** What to do once the socket connects (it autoConnects lazily on the first action). */
@@ -78,11 +80,18 @@ function reducer(state: SessionState, action: Action): SessionState {
           players: action.snapshot.players,
           state: action.snapshot.state,
           lastMove: action.snapshot.lastMove,
+          moves: action.snapshot.moves,
         },
       }
-    case 'state':
+    case 'state': {
       if (!state.game) return state
-      return { ...state, game: { ...state.game, state: action.state, lastMove: action.lastMove } }
+      // Each 'state' carries one newly-applied move; append it to the history.
+      const moves = action.lastMove ? [...state.game.moves, action.lastMove] : state.game.moves
+      return {
+        ...state,
+        game: { ...state.game, state: action.state, lastMove: action.lastMove, moves },
+      }
+    }
     case 'over':
       return { ...state, phase: 'over', result: action.result }
     case 'error':

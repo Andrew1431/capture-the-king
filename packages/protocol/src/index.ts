@@ -17,6 +17,8 @@ export interface GameSnapshot {
   players: { w: PlayerInfo; b: PlayerInfo }
   state: GameState
   lastMove: Move | null
+  /** Every move played so far, in order — seeds the client's move history. */
+  moves: Move[]
 }
 
 export interface MovePayload {

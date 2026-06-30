@@ -13,6 +13,8 @@ export interface GameRecord {
   players: { w: Seat; b: Seat }
   state: GameState
   lastMove: Move | null
+  /** Every move applied, in order — the full replayable history of the game. */
+  moves: Move[]
   createdAt: number
 }
 

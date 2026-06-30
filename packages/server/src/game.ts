@@ -15,6 +15,7 @@ export function createGameRecord(a: QueueEntry, b: QueueEntry): GameRecord {
     players: { w: toSeat(white), b: toSeat(black) },
     state: initialGameState(),
     lastMove: null,
+    moves: [],
     createdAt: Date.now(),
   }
 }
@@ -34,6 +35,7 @@ export function snapshotFor(record: GameRecord, color: Color): GameSnapshot {
     players: { w: seatToInfo(record.players.w), b: seatToInfo(record.players.b) },
     state: record.state,
     lastMove: record.lastMove,
+    moves: record.moves,
   }
 }
 
@@ -53,6 +55,7 @@ export function applyPlayerMove(record: GameRecord, uid: string, payload: MovePa
 
   record.state = result.state
   record.lastMove = result.move
+  record.moves.push(result.move)
   return { record, over: gameOverPayload(record) }
 }
 

@@ -5,6 +5,7 @@ import { Inviting } from './app/Inviting'
 import { Waiting } from './app/Waiting'
 import { AccountBar, Login, useAuth } from './auth'
 import { useGameSession } from './net/useGameSession'
+import { cn } from './lib/cn'
 import { Container, Text } from './ui'
 
 // Capture a /join/<code> deep link once at load, before auth/React mount, then
@@ -19,19 +20,23 @@ const deepLinkCode = (() => {
 export function App() {
   const { user, loading } = useAuth()
 
-  return (
-    <Container className="py-6">
-      {loading ? (
+  if (loading) {
+    return (
+      <Container className="py-6">
         <Text tone="muted" className="pt-20 text-center">
           Loading…
         </Text>
-      ) : user ? (
-        <GameApp />
-      ) : (
+      </Container>
+    )
+  }
+  if (!user) {
+    return (
+      <Container className="py-6">
         <Login />
-      )}
-    </Container>
-  )
+      </Container>
+    )
+  }
+  return <GameApp />
 }
 
 /** The authenticated experience: account bar + the live game session. */
@@ -54,8 +59,11 @@ function GameApp() {
     }
   }, [joinInvite])
 
+  // Widen the column in-game so the move-history panel sits beside the board on desktop.
+  const inGame = session.phase === 'playing' || session.phase === 'over'
+
   return (
-    <>
+    <Container className={cn('py-6', inGame && 'lg:max-w-4xl')}>
       <AccountBar />
 
       {session.phase === 'home' && (
@@ -78,6 +86,6 @@ function GameApp() {
           </div>
         </div>
       )}
-    </>
+    </Container>
   )
 }
