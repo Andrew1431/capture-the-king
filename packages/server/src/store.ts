@@ -22,6 +22,21 @@ export interface QueueEntry {
   socketId: string
 }
 
+/** An open private room waiting for a friend to join by code. */
+export interface InviteRoom {
+  code: string
+  host: QueueEntry
+  createdAt: number
+}
+
+/** Result of atomically claiming an invite room to start a game. */
+export type InviteClaim =
+  | { ok: true; room: InviteRoom }
+  | { ok: false; reason: 'not-found' | 'expired' }
+
+/** How long an unclaimed invite code stays valid. */
+export const INVITE_TTL_MS = 15 * 60 * 1000
+
 /**
  * All shared state goes through this interface. The in-memory implementation backs
  * single-instance / micro-VM mode; a Redis-backed one (M7) slots in unchanged.
@@ -35,6 +50,13 @@ export interface GameStore {
   queueShiftPair(): Promise<[QueueEntry, QueueEntry] | null>
   queuePosition(uid: string): Promise<number>
 
+  // Private invite rooms
+  inviteCreate(room: InviteRoom): Promise<void>
+  inviteGet(code: string): Promise<InviteRoom | undefined>
+  /** Atomically remove and return a non-expired room, or report why it failed. */
+  inviteClaim(code: string): Promise<InviteClaim>
+  inviteDeleteByHost(uid: string): Promise<void>
+
   // Live games
   createGame(record: GameRecord): Promise<void>
   getGame(id: string): Promise<GameRecord | undefined>
@@ -46,6 +68,7 @@ export interface GameStore {
 export class MemoryStore implements GameStore {
   private queue: QueueEntry[] = []
   private games = new Map<string, GameRecord>()
+  private invites = new Map<string, InviteRoom>()
 
   async queueJoin(entry: QueueEntry): Promise<void> {
     this.queue = this.queue.filter((e) => e.uid !== entry.uid)
@@ -66,6 +89,33 @@ export class MemoryStore implements GameStore {
   async queuePosition(uid: string): Promise<number> {
     const i = this.queue.findIndex((e) => e.uid === uid)
     return i < 0 ? 0 : i + 1
+  }
+
+  async inviteCreate(room: InviteRoom): Promise<void> {
+    this.invites.set(room.code, room)
+  }
+
+  async inviteGet(code: string): Promise<InviteRoom | undefined> {
+    return this.invites.get(code)
+  }
+
+  // No `await` inside, so this whole body runs atomically per call: concurrent
+  // joiners can't both claim the same room (the loser sees 'not-found').
+  async inviteClaim(code: string): Promise<InviteClaim> {
+    const room = this.invites.get(code)
+    if (!room) return { ok: false, reason: 'not-found' }
+    if (Date.now() - room.createdAt > INVITE_TTL_MS) {
+      this.invites.delete(code)
+      return { ok: false, reason: 'expired' }
+    }
+    this.invites.delete(code)
+    return { ok: true, room }
+  }
+
+  async inviteDeleteByHost(uid: string): Promise<void> {
+    for (const [code, room] of this.invites) {
+      if (room.host.uid === uid) this.invites.delete(code)
+    }
   }
 
   async createGame(record: GameRecord): Promise<void> {

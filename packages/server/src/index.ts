@@ -2,8 +2,16 @@ import { createServer } from 'node:http'
 import { Server } from 'socket.io'
 import type { GameOverPayload, HandshakeAuth } from '@ctk/protocol'
 import { initAuth, verifyToken } from './auth.js'
-import { applyPlayerMove, seatColor, snapshotFor } from './game.js'
-import { joinQueue, leaveQueue, seatSocket, type AppServer } from './matchmaking.js'
+import { applyPlayerMove, seatColor } from './game.js'
+import {
+  cancelInvite,
+  createInvite,
+  joinInvite,
+  joinQueue,
+  leaveQueue,
+  resumeGame,
+  type AppServer,
+} from './matchmaking.js'
 import { MemoryStore, type GameRecord } from './store.js'
 
 const PORT = Number(process.env.PORT ?? 8080)
@@ -46,13 +54,7 @@ io.on('connection', async (socket) => {
 
   // Reconnect: if this player has a live game, re-seat them and resend the state.
   const existing = await store.findActiveGameByUid(uid)
-  if (existing) {
-    const color = seatColor(existing, uid)!
-    existing.players[color].socketId = socket.id
-    await store.saveGame(existing)
-    seatSocket(io, socket.id, existing.id)
-    socket.emit('game:start', snapshotFor(existing, color))
-  }
+  if (existing) await resumeGame(io, store, existing, uid, socket.id)
 
   /** Load the game this socket is seated in, or null. */
   async function currentGame(): Promise<GameRecord | null> {
@@ -74,6 +76,18 @@ io.on('connection', async (socket) => {
 
   socket.on('queue:leave', () => {
     void leaveQueue(store, uid)
+  })
+
+  socket.on('invite:create', (ack) => {
+    void createInvite(io, store, { uid, name, socketId: socket.id }, ack)
+  })
+
+  socket.on('invite:cancel', () => {
+    void cancelInvite(store, uid)
+  })
+
+  socket.on('invite:join', ({ code }, ack) => {
+    void joinInvite(io, store, { uid, name, socketId: socket.id }, code, ack)
   })
 
   socket.on('move', async (payload) => {
@@ -102,6 +116,7 @@ io.on('connection', async (socket) => {
 
   socket.on('disconnect', async () => {
     await leaveQueue(store, uid)
+    await cancelInvite(store, uid)
     // Keep the live game alive for a reconnect grace; just clear the socket binding.
     const game = await currentGame()
     if (!game) return
