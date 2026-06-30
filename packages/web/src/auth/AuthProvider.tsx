@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import {
   createUserWithEmailAndPassword,
   EmailAuthProvider,
+  getIdToken,
   linkWithCredential,
   linkWithPopup,
   onAuthStateChanged,
@@ -9,6 +10,7 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
+  updateProfile,
   type User,
 } from 'firebase/auth'
 import { firebaseAuth, googleProvider } from './firebase'
@@ -27,6 +29,8 @@ export interface AuthValue {
   linkGoogle: () => Promise<void>
   /** Upgrade the current anonymous guest to a permanent email/password account. */
   linkEmail: (email: string, password: string) => Promise<void>
+  /** Change the display name of a permanent (non-guest) account. */
+  setDisplayName: (name: string) => Promise<void>
   signOutUser: () => Promise<void>
 }
 
@@ -99,6 +103,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         attempt(() =>
           linkWithCredential(requireGuest(), EmailAuthProvider.credential(email, password)),
         ),
+      setDisplayName: async (name) => {
+        const u = firebaseAuth.currentUser
+        if (!u || u.isAnonymous) throw new Error('Sign in to set a display name.')
+        const trimmed = name.trim()
+        if (trimmed.length < 2 || trimmed.length > 24) {
+          throw new Error('Display name must be 2–24 characters.')
+        }
+        try {
+          await updateProfile(u, { displayName: trimmed })
+          // The token's `name` claim is set at mint time; refresh so the server sees it.
+          await getIdToken(u, true)
+        } catch (err) {
+          throw new Error(describe(err))
+        }
+        // Surface the change to React (updateProfile mutates in place, no auth event).
+        setUser({ ...u } as User)
+      },
       signOutUser: () => attempt(() => signOut(firebaseAuth)),
     }),
     [user, loading],

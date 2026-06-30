@@ -1,0 +1,18 @@
+# Build the server image from the monorepo root (the Dockerfile COPYs workspace
+# files from the repo root, so the build context must be `.`, not packages/server).
+# Used by: gcloud builds submit --config cloudbuild.yaml
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - packages/server/Dockerfile
+      - -t
+      - ${_IMAGE}
+      - .
+images:
+  - ${_IMAGE}
+substitutions:
+  _IMAGE: us-central1-docker.pkg.dev/capture-the-king/ctk/server:latest
+options:
+  logging: CLOUD_LOGGING_ONLY
