@@ -14,11 +14,13 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "dev": "concurrently -n server,web -c blue,green \"pnpm:dev:server\" \"pnpm:dev:web\"",
     "dev:server": "pnpm --filter @ctk/server dev",
     "dev:web": "pnpm --filter @ctk/web dev"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
+    "concurrently": "^10.0.3",
     "eslint": "^9.17.0",
     "globals": "^15.14.0",
     "prettier": "^3.4.2",
@@ -26,6 +28,8 @@
     "typescript-eslint": "^8.18.2"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }
