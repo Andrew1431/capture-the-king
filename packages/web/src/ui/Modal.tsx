@@ -9,10 +9,10 @@ interface ModalProps {
 export function Modal({ children, onClose }: ModalProps) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
-      <div className="w-full max-w-xs" onClick={(e) => e.stopPropagation()}>
+      <div className="animate-rise w-full max-w-xs" onClick={(e) => e.stopPropagation()}>
         {children}
       </div>
     </div>

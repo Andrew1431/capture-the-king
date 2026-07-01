@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { initialGameState } from '@ctk/engine'
 import { Board } from '../board/Board'
-import { Button, Heading, Stack, Text } from '../ui'
+import { Button, Eyebrow, Stack, Text, Wordmark } from '../ui'
 
 interface HomeProps {
   onPlay: () => void
@@ -14,13 +14,12 @@ export function Home({ onPlay, onCreateInvite, onJoinCode }: HomeProps) {
   const trimmed = code.trim()
 
   return (
-    <Stack gap={8}>
-      <Stack gap={2} align="center" className="text-center">
-        <Heading level={1}>
-          Capture the <span className="text-brand">King</span>
-        </Heading>
-        <Text tone="muted">
-          No check. No checkmate. Take the enemy king and the game is yours.
+    <Stack gap={7}>
+      <Stack gap={3} align="center" className="pt-2 text-center">
+        <Eyebrow>No check · No checkmate</Eyebrow>
+        <Wordmark />
+        <Text tone="muted" className="max-w-xs">
+          Hunt down the enemy king. Take it, and the crown is yours.
         </Text>
       </Stack>
 
@@ -28,11 +27,19 @@ export function Home({ onPlay, onCreateInvite, onJoinCode }: HomeProps) {
 
       <Stack gap={3}>
         <Button size="lg" block onClick={onPlay}>
-          Play
+          Play now
         </Button>
         <Button size="lg" variant="secondary" block onClick={onCreateInvite}>
-          Play a friend
+          Challenge a friend
         </Button>
+
+        <div className="flex items-center gap-3 pt-1 text-muted">
+          <span className="h-px flex-1 bg-border" />
+          <span className="font-display text-[0.6rem] font-semibold tracking-[0.3em] uppercase">
+            or join a room
+          </span>
+          <span className="h-px flex-1 bg-border" />
+        </div>
 
         <form
           className="flex gap-2"
@@ -44,12 +51,12 @@ export function Home({ onPlay, onCreateInvite, onJoinCode }: HomeProps) {
           <input
             value={code}
             onChange={(e) => setCode(e.target.value.toUpperCase())}
-            placeholder="Enter code"
+            placeholder="CODE"
             inputMode="text"
             autoCapitalize="characters"
             autoComplete="off"
             maxLength={8}
-            className="h-14 w-full rounded-xl bg-surface-2 px-4 text-lg tracking-widest text-text uppercase placeholder:tracking-normal placeholder:text-muted focus-visible:ring-2 focus-visible:ring-brand/60 focus-visible:outline-none"
+            className="h-14 w-full rounded-xl bg-surface-2 px-4 font-mono text-lg tracking-widest text-text uppercase ring-1 ring-inset ring-border placeholder:tracking-[0.2em] placeholder:text-muted/60 focus-visible:ring-2 focus-visible:ring-brand/60 focus-visible:outline-none"
           />
           <Button type="submit" size="lg" variant="secondary" disabled={!trimmed}>
             Join

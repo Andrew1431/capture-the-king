@@ -2,12 +2,12 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import type { ElementType, HTMLAttributes } from 'react'
 import { cn } from '../lib/cn'
 
-const heading = cva('font-display font-bold tracking-tight text-text', {
+const heading = cva('font-display font-bold tracking-wide text-text', {
   variants: {
     level: {
       1: 'text-3xl sm:text-4xl',
       2: 'text-2xl sm:text-3xl',
-      3: 'text-xl sm:text-2xl',
+      3: 'text-lg sm:text-xl tracking-wider uppercase',
     },
   },
   defaultVariants: { level: 1 },

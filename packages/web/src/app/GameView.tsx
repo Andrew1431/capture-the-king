@@ -75,7 +75,9 @@ export function GameView({ session }: GameViewProps) {
   if (!game || !material) return null
 
   const targetSquares = new Set(targets.map((m) => m.to))
-  const opponent = game.color === 'w' ? game.players.b : game.players.w
+  const me = game.color
+  const them: Color = me === 'w' ? 'b' : 'w'
+  const live = phase === 'playing'
 
   // Attempt a move from->to; returns false if no legal move connects them.
   function tryMove(from: number, to: number): boolean {
@@ -124,29 +126,17 @@ export function GameView({ session }: GameViewProps) {
 
   return (
     <Stack gap={5}>
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-6">
-        <Stack gap={5} className="w-full lg:min-w-0 lg:max-w-xl lg:flex-1">
-          <Stack direction="row" justify="between" align="center">
-            <Stack gap={1}>
-              <Text size="sm" tone="muted">
-                vs {opponent.name}
-              </Text>
-              <Text className="font-semibold">
-                You are {game.color === 'w' ? 'White' : 'Black'}
-              </Text>
-            </Stack>
-            <Stack direction="row" align="center" gap={2}>
-              {clock && (
-                <Clock ms={clock[game.color === 'w' ? 'b' : 'w']} running={clock.running === (game.color === 'w' ? 'b' : 'w')} />
-              )}
-              <TurnPill myTurn={myTurn} active={phase === 'playing'} />
-            </Stack>
-          </Stack>
-
-          <CapturedTray
-            pieces={material.captured[game.color]}
-            color={game.color}
-            advantage={material.advantage[game.color === 'w' ? 'b' : 'w']}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
+        <Stack gap={3} className="w-full lg:min-w-0 lg:max-w-xl lg:flex-1">
+          <PlayerPanel
+            name={game.players[them].name}
+            color={them}
+            isYou={false}
+            captured={material.captured[them]}
+            advantage={material.advantage[them]}
+            clockMs={clock ? clock[them] : null}
+            clockRunning={clock?.running === them}
+            toMove={live && game.state.turn === them}
           />
 
           <Board
@@ -161,23 +151,25 @@ export function GameView({ session }: GameViewProps) {
             interactive={myTurn}
           />
 
-          <CapturedTray
-            pieces={material.captured[game.color === 'w' ? 'b' : 'w']}
-            color={game.color === 'w' ? 'b' : 'w'}
-            advantage={material.advantage[game.color]}
+          <PlayerPanel
+            name={game.players[me].name}
+            color={me}
+            isYou
+            captured={material.captured[me]}
+            advantage={material.advantage[me]}
+            clockMs={clock ? clock[me] : null}
+            clockRunning={clock?.running === me}
+            toMove={myTurn}
           />
 
-          <Stack direction="row" justify="between" align="center">
-            <Button variant="ghost" size="sm" onClick={resign} disabled={phase !== 'playing'}>
+          <div className="flex items-center justify-between pt-1">
+            <Button variant="ghost" size="sm" onClick={resign} disabled={!live}>
               Resign
             </Button>
-            <Stack direction="row" align="center" gap={3}>
-              <Text size="sm" tone="muted" className="hidden sm:block">
-                {game.players.w.name} (W) vs {game.players.b.name} (B)
-              </Text>
-              {clock && <Clock ms={clock[game.color]} running={clock.running === game.color} />}
-            </Stack>
-          </Stack>
+            <Text size="sm" tone="muted" className="font-mono">
+              {game.players.w.name} · W vs B · {game.players.b.name}
+            </Text>
+          </div>
         </Stack>
 
         <MoveHistory moves={game.moves} className="lg:w-72 lg:shrink-0" />
@@ -194,9 +186,14 @@ export function GameView({ session }: GameViewProps) {
                     key={pt}
                     type="button"
                     onClick={() => choosePromo(pt)}
-                    className="flex h-16 w-16 items-center justify-center rounded-xl bg-surface-2 transition-colors hover:bg-border"
+                    className="flex h-16 w-16 items-center justify-center rounded-xl bg-surface-2 ring-1 ring-inset ring-border transition-colors hover:bg-surface hover:ring-brand/50"
                   >
-                    <img src={PIECE_SVG[game.color][pt]} alt={pt} draggable={false} className="h-11 w-11" />
+                    <img
+                      src={PIECE_SVG[game.color][pt]}
+                      alt={pt}
+                      draggable={false}
+                      className="h-11 w-11"
+                    />
                   </button>
                 ))}
               </Stack>
@@ -206,24 +203,85 @@ export function GameView({ session }: GameViewProps) {
       )}
 
       {phase === 'over' && result && (
-        <Modal>
-          <Card>
-            <Stack gap={4} align="center" className="text-center">
-              <OverMessage myColor={game.color} winner={result.winner} reason={result.reason} />
-              <Button block onClick={newGame}>
-                Play again
-              </Button>
-            </Stack>
-          </Card>
-        </Modal>
+        <OverModal myColor={game.color} winner={result.winner} reason={result.reason} onAgain={newGame} />
       )}
     </Stack>
   )
 }
 
 /**
- * Row of pieces one side has captured, with a +N material-advantage badge.
- * Reserves height even when empty so the board never shifts as pieces fall.
+ * One competitor's strip: crowned medallion, name, captured material and clock.
+ * The whole panel lights gold on the side to move, and "you" carry a standing gold
+ * accent — so whose turn it is and whose clock is ticking are never in doubt.
+ */
+function PlayerPanel({
+  name,
+  color,
+  isYou,
+  captured,
+  advantage,
+  clockMs,
+  clockRunning,
+  toMove,
+}: {
+  name: string
+  color: Color
+  isYou: boolean
+  captured: PieceType[]
+  advantage: number
+  clockMs: number | null
+  clockRunning: boolean
+  toMove: boolean
+}) {
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-3 rounded-2xl border px-3 py-2.5 transition-all duration-300',
+        toMove
+          ? 'border-brand/50 bg-surface shadow-[0_0_0_1px_rgba(232,184,75,0.25),0_10px_30px_-16px_rgba(232,184,75,0.7)]'
+          : 'border-border bg-surface/50',
+      )}
+    >
+      <Medallion color={color} toMove={toMove} />
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="truncate font-semibold text-text">{name}</span>
+          {isYou && (
+            <span className="rounded-full bg-brand/15 px-1.5 py-0.5 font-display text-[0.6rem] font-bold tracking-widest text-brand uppercase">
+              You
+            </span>
+          )}
+        </div>
+        <CapturedTray pieces={captured} color={color} advantage={advantage} />
+      </div>
+
+      <Clock ms={clockMs} running={clockRunning} />
+    </div>
+  )
+}
+
+/** Crowned color token — parchment for White, ink for Black — haloed when to move. */
+function Medallion({ color, toMove }: { color: Color; toMove: boolean }) {
+  return (
+    <div
+      className={cn(
+        'relative grid h-11 w-11 shrink-0 place-items-center rounded-full ring-1 transition-all duration-300',
+        color === 'w' ? 'bg-board-light ring-black/10' : 'bg-surface-2 ring-white/10',
+        toMove && 'ring-2 ring-brand shadow-[0_0_16px_-2px_rgba(232,184,75,0.8)]',
+      )}
+    >
+      <img src={PIECE_SVG[color].k} alt="" draggable={false} className="h-7 w-7" />
+      {toMove && (
+        <span className="absolute -right-0.5 -bottom-0.5 h-3 w-3 animate-pulse rounded-full border-2 border-surface bg-brand" />
+      )}
+    </div>
+  )
+}
+
+/**
+ * Row of pieces this player has captured, with a +N material-advantage badge.
+ * Reserves height even when empty so the panel never jumps as pieces fall.
  */
 function CapturedTray({
   pieces,
@@ -235,18 +293,21 @@ function CapturedTray({
   advantage: number
 }) {
   return (
-    <div className="flex min-h-5 items-center gap-1">
+    <div className="flex min-h-5 items-center gap-0.5">
       {pieces.map((pt, i) => (
         <img
           key={`${pt}-${i}`}
           src={PIECE_SVG[color][pt]}
           alt={pt}
           draggable={false}
-          className="h-5 w-5"
+          className="h-4 w-4 opacity-90"
         />
       ))}
       {advantage > 0 && (
-        <span className="ml-1 text-sm font-semibold text-muted">+{advantage}</span>
+        <span className="ml-1 font-mono text-xs font-bold text-brand">+{advantage}</span>
+      )}
+      {pieces.length === 0 && advantage === 0 && (
+        <span className="font-mono text-xs text-muted/50">no captures</span>
       )}
     </div>
   )
@@ -281,18 +342,23 @@ function useLiveClock(clock: ClockState | null): ClockState | null {
   }
 }
 
-/** mm:ss clock chip; gold while running, red under 30s, muted while idle. */
-function Clock({ ms, running }: { ms: number; running: boolean }) {
+/**
+ * mm:ss readout. A ticking clock reads as a filled gold chip so an active timer is
+ * obvious at a glance; the final 30s turn crimson and beat; idle clocks stay quiet.
+ */
+function Clock({ ms, running }: { ms: number | null; running: boolean }) {
+  if (ms == null) return null
   const total = Math.max(0, Math.ceil(ms / 1000))
   const label = `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
   const urgent = running && total <= 30
   return (
     <span
       className={cn(
-        'rounded-lg bg-surface-2 px-2.5 py-1 font-mono text-sm font-semibold tabular-nums',
-        !running && 'text-muted',
-        running && !urgent && 'text-brand',
-        urgent && 'text-danger',
+        'rounded-lg px-3 py-1.5 font-mono text-xl font-bold tabular-nums tracking-tight',
+        !running && 'bg-surface-2 text-muted',
+        running && !urgent &&
+          'bg-gradient-to-b from-brand to-brand-strong text-bg shadow-[0_4px_14px_-6px_rgba(232,184,75,0.9)]',
+        urgent && 'animate-heartbeat bg-danger text-white shadow-[0_4px_14px_-6px_rgba(214,73,58,0.9)]',
       )}
     >
       {label}
@@ -300,51 +366,94 @@ function Clock({ ms, running }: { ms: number; running: boolean }) {
   )
 }
 
-function TurnPill({ myTurn, active }: { myTurn: boolean; active: boolean }) {
-  if (!active) return null
-  return (
-    <span
-      className={
-        myTurn
-          ? 'rounded-full bg-brand px-3 py-1 text-sm font-semibold text-bg'
-          : 'rounded-full bg-surface-2 px-3 py-1 text-sm font-semibold text-muted'
-      }
-    >
-      {myTurn ? 'Your move' : 'Their move'}
-    </span>
-  )
-}
-
-function OverMessage({
+/** The end-of-game moment: a regicide gets a wax-seal crown; other ends stay sober. */
+function OverModal({
   myColor,
   winner,
   reason,
+  onAgain,
 }: {
   myColor: 'w' | 'b'
   winner: 'w' | 'b' | null
   reason: string
+  onAgain: () => void
 }) {
-  const title = winner == null ? 'Draw' : winner === myColor ? 'You win!' : 'You lose'
+  const won = winner === myColor
+  const draw = winner == null
+  const regicide = won && reason === 'king-captured'
+
+  const title = draw ? 'Stalemate' : regicide ? 'Regicide' : won ? 'Victory' : 'Defeated'
   const detail =
     reason === 'king-captured'
-      ? winner === myColor
+      ? won
         ? 'You captured the enemy king.'
         : 'Your king was captured.'
       : reason === 'resign'
-        ? winner === myColor
+        ? won
           ? 'Your opponent resigned.'
           : 'You resigned.'
         : reason === 'timeout'
-          ? winner === myColor
+          ? won
             ? 'Your opponent ran out of time.'
             : 'You ran out of time.'
           : reason === 'stalemate'
             ? 'Stalemate — no legal moves.'
             : 'Game over.'
+
   return (
-    <Stack gap={1} align="center">
-      <Heading level={2}>{title}</Heading>
-      <Text tone="muted">{detail}</Text>
-    </Stack>
+    <Modal>
+      <Card className="overflow-hidden">
+        <Stack gap={4} align="center" className="text-center">
+          <div className="relative grid place-items-center">
+            {(won || draw) && (
+              <>
+                <span className="animate-bloom absolute h-24 w-24 rounded-full bg-brand/40" />
+                <span
+                  className="animate-bloom absolute h-24 w-24 rounded-full bg-brand/25"
+                  style={{ animationDelay: '0.15s' }}
+                />
+              </>
+            )}
+            {/* Wax-seal crown medallion. */}
+            <div
+              className={cn(
+                'animate-seal relative grid h-20 w-20 place-items-center rounded-full ring-2',
+                won
+                  ? 'bg-gradient-to-b from-brand to-brand-strong ring-brand/60 shadow-[0_10px_30px_-8px_rgba(232,184,75,0.8)]'
+                  : draw
+                    ? 'bg-surface-2 ring-border'
+                    : 'bg-surface-2 ring-danger/40',
+              )}
+            >
+              <svg viewBox="0 0 32 32" className="h-11 w-11" aria-hidden>
+                <path
+                  d="M5 23L3 10l7 5L16 6l6 9 7-5-2 13z"
+                  fill={won ? '#100c1a' : draw ? '#a99fc0' : '#d6493a'}
+                />
+                <rect
+                  x="5"
+                  y="24"
+                  width="22"
+                  height="3.4"
+                  rx="1.2"
+                  fill={won ? '#100c1a' : draw ? '#a99fc0' : '#d6493a'}
+                />
+              </svg>
+            </div>
+          </div>
+
+          <Stack gap={1} align="center">
+            <Heading level={2} className={cn(regicide && 'text-brand')}>
+              {title}
+            </Heading>
+            <Text tone="muted">{detail}</Text>
+          </Stack>
+
+          <Button block onClick={onAgain}>
+            Play again
+          </Button>
+        </Stack>
+      </Card>
+    </Modal>
   )
 }

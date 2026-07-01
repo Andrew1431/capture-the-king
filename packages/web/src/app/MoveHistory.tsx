@@ -49,7 +49,7 @@ function MoveList({ moves }: { moves: Move[] }) {
 
   return (
     <div ref={ref} className="max-h-64 overflow-y-auto lg:max-h-[28rem]">
-      <table className="w-full border-collapse text-sm tabular-nums">
+      <table className="w-full border-collapse font-mono text-sm tabular-nums">
         <tbody>
           {toRows(moves).map((row) => (
             <tr key={row.no} className="border-b border-border/40 last:border-0">
@@ -92,9 +92,12 @@ export function MoveHistory({ moves, className }: { moves: Move[]; className?: s
           className,
         )}
       >
-        <div className="border-b border-border px-3 py-2">
-          <Text size="sm" className="font-semibold">
-            Moves
+        <div className="border-b border-border px-3 py-2.5">
+          <Text
+            size="sm"
+            className="font-display font-semibold tracking-[0.2em] text-muted uppercase"
+          >
+            Scoresheet
           </Text>
         </div>
         <MoveList moves={moves} />
@@ -102,8 +105,8 @@ export function MoveHistory({ moves, className }: { moves: Move[]; className?: s
 
       {/* Mobile: collapsible disclosure under the board. */}
       <details className="rounded-2xl border border-border bg-surface lg:hidden" open>
-        <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold">
-          Moves ({moves.length})
+        <summary className="cursor-pointer px-3 py-2.5 font-display text-sm font-semibold tracking-[0.2em] text-muted uppercase select-none">
+          Scoresheet · {moves.length}
         </summary>
         <div className="border-t border-border">
           <MoveList moves={moves} />

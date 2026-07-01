@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Heading, Stack, Text } from '../ui'
+import { Button, Heading, Loader, Stack, Text } from '../ui'
 
 interface InvitingProps {
   code: string | null
@@ -35,7 +35,7 @@ export function Inviting({ code, onCancel }: InvitingProps) {
 
         {code && (
           <Stack gap={3} align="center">
-            <span className="rounded-2xl bg-surface-2 px-8 py-4 text-5xl font-bold tracking-[0.3em] text-brand">
+            <span className="ring-gilt rounded-2xl bg-surface-2 px-8 py-4 font-mono text-5xl font-bold tracking-[0.3em] text-brand">
               {code}
             </span>
             <Button variant="secondary" onClick={copy}>
@@ -44,9 +44,7 @@ export function Inviting({ code, onCancel }: InvitingProps) {
           </Stack>
         )}
 
-        {minting && (
-          <span className="h-12 w-12 animate-spin rounded-full border-4 border-border border-t-brand" />
-        )}
+        {minting && <Loader />}
       </Stack>
 
       <Button variant="ghost" onClick={onCancel}>

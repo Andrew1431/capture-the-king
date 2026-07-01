@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BuyMeACoffeeLink, Button, Card, DiscordLink, GithubLink, Heading, Stack, Text } from '../ui'
+import { BuyMeACoffeeLink, Button, Card, DiscordLink, GithubLink, Stack, Text, Wordmark } from '../ui'
 import { useAuth } from './AuthProvider'
 import { CredentialsForm } from './CredentialsForm'
 
@@ -26,10 +26,8 @@ export function Login() {
 
   return (
     <Stack gap={6}>
-      <Stack gap={2} align="center" className="text-center">
-        <Heading level={1}>
-          Capture the <span className="text-brand">King</span>
-        </Heading>
+      <Stack gap={3} align="center" className="pt-2 text-center">
+        <Wordmark />
         <Text tone="muted">Sign in to play. Guests are welcome — no account needed.</Text>
       </Stack>
 

@@ -1,4 +1,6 @@
 export { Button } from './Button'
+export { Wordmark, Eyebrow } from './Wordmark'
+export { Loader } from './Loader'
 export { Heading, Text } from './Text'
 export { Container, Stack } from './Layout'
 export { Card } from './Card'

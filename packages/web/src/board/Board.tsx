@@ -118,9 +118,9 @@ export function Board({
 
   return (
     <>
-      <div className="aspect-square w-full touch-manipulation overflow-hidden rounded-2xl border border-border shadow-md">
-        <div ref={gridRef} className="grid h-full w-full grid-cols-8">
-          {order.map((index) => {
+      <div className="ring-gilt animate-board-in relative aspect-square w-full touch-manipulation overflow-hidden rounded-2xl border border-border p-[3px]">
+        <div ref={gridRef} className="grid h-full w-full grid-cols-8 overflow-hidden rounded-xl">
+          {order.map((index, vi) => {
             const row = Math.floor(index / 8)
             const col = index % 8
             const dark = (row + col) % 2 === 1
@@ -130,6 +130,11 @@ export function Board({
             const isSelected = selected === index
             const isLast = lastMove != null && (lastMove.from === index || lastMove.to === index)
             const isDragging = drag?.moved === true && drag.from === index && canDrag(drag.piece)
+            // Coordinate labels ride the outer edges (lichess-style), so the board
+            // still runs edge-to-edge on a phone. vi is the on-screen position.
+            const fileLabel = vi >= 56 ? 'abcdefgh'[col] : null
+            const rankLabel = vi % 8 === 0 ? String(8 - row) : null
+            const labelDark = dark ? 'text-board-light/70' : 'text-board-dark/70'
 
             return (
               <button
@@ -144,10 +149,30 @@ export function Board({
                   'relative flex aspect-square select-none items-center justify-center',
                   dark ? 'bg-board-dark' : 'bg-board-light',
                   interactive ? 'cursor-pointer touch-none' : 'cursor-default',
-                  isLast && 'ring-2 ring-inset ring-board-mark/70',
-                  isSelected && 'ring-4 ring-inset ring-brand',
+                  isLast && 'ring-2 ring-inset ring-board-mark/80',
+                  isSelected && 'z-10 ring-4 ring-inset ring-brand',
                 )}
               >
+                {rankLabel && (
+                  <span
+                    className={cn(
+                      'pointer-events-none absolute top-0.5 left-0.5 font-display text-[0.5rem] leading-none font-bold sm:text-[0.6rem]',
+                      labelDark,
+                    )}
+                  >
+                    {rankLabel}
+                  </span>
+                )}
+                {fileLabel && (
+                  <span
+                    className={cn(
+                      'pointer-events-none absolute right-0.5 bottom-0.5 font-display text-[0.5rem] leading-none font-bold sm:text-[0.6rem]',
+                      labelDark,
+                    )}
+                  >
+                    {fileLabel}
+                  </span>
+                )}
                 {piece && (
                   <img
                     src={PIECE_SVG[piece.c][piece.t]}
@@ -161,21 +186,26 @@ export function Board({
                   />
                 )}
 
+                {/* King-echo: the ghost the king leaves behind — the game's signature.
+                    A faint, violet-lit crown that breathes where it can still be taken. */}
                 {isGhost && !piece && state.ghost && (
-                  <img
-                    src={PIECE_SVG[state.ghost.color].k}
-                    alt=""
-                    draggable={false}
-                    className={cn(PIECE_SIZE, 'pointer-events-none animate-pulse opacity-50')}
-                  />
+                  <>
+                    <span className="animate-echo pointer-events-none absolute inset-[18%] rounded-full bg-royal/25 blur-md" />
+                    <img
+                      src={PIECE_SVG[state.ghost.color].k}
+                      alt=""
+                      draggable={false}
+                      className={cn(PIECE_SIZE, 'animate-echo pointer-events-none relative')}
+                    />
+                  </>
                 )}
 
                 {/* Move hint: a dot on empty targets, a ring around capturable squares. */}
                 {isTarget &&
                   (piece || isGhost ? (
-                    <span className="pointer-events-none absolute inset-1 rounded-full ring-4 ring-brand/70" />
+                    <span className="pointer-events-none absolute inset-1 rounded-full ring-[3px] ring-brand shadow-[0_0_10px_rgba(232,184,75,0.6)]" />
                   ) : (
-                    <span className="pointer-events-none absolute h-1/4 w-1/4 rounded-full bg-brand/70" />
+                    <span className="pointer-events-none absolute h-[30%] w-[30%] rounded-full bg-brand/80 shadow-[0_0_8px_rgba(232,184,75,0.5)]" />
                   ))}
               </button>
             )

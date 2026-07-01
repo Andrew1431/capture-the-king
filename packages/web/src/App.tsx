@@ -6,7 +6,7 @@ import { Waiting } from './app/Waiting'
 import { AccountBar, Login, useAuth } from './auth'
 import { useGameSession } from './net/useGameSession'
 import { cn } from './lib/cn'
-import { Button, Card, Container, Heading, Modal, Stack, Text } from './ui'
+import { Button, Card, Container, Heading, Loader, Modal, Stack, Text } from './ui'
 
 // Capture a /join/<code> deep link once at load, before auth/React mount, then
 // strip it from the URL so a refresh doesn't re-trigger the join.
@@ -23,9 +23,12 @@ export function App() {
   if (loading) {
     return (
       <Container className="py-6">
-        <Text tone="muted" className="pt-20 text-center">
-          Loading…
-        </Text>
+        <Stack gap={4} align="center" justify="center" className="min-h-[70dvh]">
+          <Loader />
+          <Text tone="muted" className="font-display tracking-widest uppercase">
+            Setting the board
+          </Text>
+        </Stack>
       </Container>
     )
   }
