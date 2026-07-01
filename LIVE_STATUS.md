@@ -162,6 +162,7 @@ SA=gh-deployer@$PROJECT_ID.iam.gserviceaccount.com
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA" --role="roles/run.admin"
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA" --role="roles/cloudbuild.builds.editor"
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA" --role="roles/storage.admin"
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA" --role="roles/artifactregistry.reader"
 # Let it deploy a service that RUNS AS the Cloud Run runtime SA
 gcloud iam service-accounts add-iam-policy-binding \
   $PROJECT_NUM-compute@developer.gserviceaccount.com \

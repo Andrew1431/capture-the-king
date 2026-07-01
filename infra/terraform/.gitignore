@@ -1,0 +1,9 @@
+# Local state (may hold sensitive values) and downloaded providers.
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+
+# Your real, filled-in variables — keep only the .example in git.
+terraform.tfvars
+*.auto.tfvars

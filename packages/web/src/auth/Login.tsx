@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Card, Heading, Stack, Text } from '../ui'
+import { BuyMeACoffeeLink, Button, Card, GithubLink, Heading, Stack, Text } from '../ui'
 import { useAuth } from './AuthProvider'
 import { CredentialsForm } from './CredentialsForm'
 
@@ -78,6 +78,11 @@ export function Login() {
       <Button variant="ghost" block disabled={busy} onClick={() => run(signInGuest)}>
         Continue as guest
       </Button>
+
+      <div className="flex justify-center gap-1">
+        <BuyMeACoffeeLink />
+        <GithubLink />
+      </div>
     </Stack>
   )
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Text } from '../ui'
+import { BuyMeACoffeeLink, Button, GithubLink, Text } from '../ui'
 import { AccountMenu } from './AccountMenu'
 import { useAuth } from './AuthProvider'
 
@@ -15,9 +15,13 @@ export function AccountBar() {
         {label}
         {isGuest && ' (guest)'}
       </Text>
-      <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
-        Account
-      </Button>
+      <div className="flex items-center gap-1">
+        <BuyMeACoffeeLink />
+        <GithubLink />
+        <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
+          Account
+        </Button>
+      </div>
       {open && <AccountMenu onClose={() => setOpen(false)} />}
     </div>
   )
