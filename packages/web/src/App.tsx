@@ -8,14 +8,42 @@ import { useGameSession } from './net/useGameSession'
 import { cn } from './lib/cn'
 import { Button, Card, Container, Heading, Loader, Modal, Stack, Text } from './ui'
 
-// Capture a /join/<code> deep link once at load, before auth/React mount, then
-// strip it from the URL so a refresh doesn't re-trigger the join.
-const deepLinkCode = (() => {
+// Capture a /join/<code> deep link once at load, before auth/React mount. We stash it
+// in sessionStorage (so it survives the login screen and any full-page reload during
+// sign-in) plus a module var (so it still works if storage is blocked), then strip it
+// from the URL so a refresh doesn't re-trigger the join.
+const JOIN_KEY = 'ctk:pendingJoin'
+let pendingJoinCode: string | null = null
+
+;(() => {
   const m = window.location.pathname.match(/^\/join\/([A-Za-z0-9]{4,8})$/)
-  if (!m) return null
+  if (!m) return
+  pendingJoinCode = m[1].toUpperCase()
+  try {
+    sessionStorage.setItem(JOIN_KEY, pendingJoinCode)
+  } catch {
+    // Storage blocked (private mode) — the module var still carries it for this load.
+  }
   window.history.replaceState(null, '', '/')
-  return m[1].toUpperCase()
 })()
+
+function readPendingJoin(): string | null {
+  if (pendingJoinCode) return pendingJoinCode
+  try {
+    return sessionStorage.getItem(JOIN_KEY)
+  } catch {
+    return null
+  }
+}
+
+function clearPendingJoin() {
+  pendingJoinCode = null
+  try {
+    sessionStorage.removeItem(JOIN_KEY)
+  } catch {
+    // ignore
+  }
+}
 
 export function App() {
   const { user, loading } = useAuth()
@@ -54,13 +82,24 @@ function GameApp() {
     return () => clearTimeout(t)
   }, [error, dismissError])
 
-  // Now that the user is signed in, consume a /join/<code> deep link exactly once.
+  // Now that the user is signed in, consume a pending /join/<code> invite. The guard
+  // resets on cleanup so React StrictMode's mount→unmount→remount (dev) re-issues the
+  // join on the live socket instead of dropping it against the torn-down one.
   useEffect(() => {
-    if (deepLinkCode && !deepLinkUsed.current) {
-      deepLinkUsed.current = true
-      joinInvite(deepLinkCode)
+    const code = readPendingJoin()
+    if (!code || deepLinkUsed.current) return
+    deepLinkUsed.current = true
+    joinInvite(code)
+    return () => {
+      deepLinkUsed.current = false
     }
   }, [joinInvite])
+
+  // Once we've actually entered a game, drop the stored invite so it can't replay
+  // (e.g. after a later sign-out/sign-in in the same tab).
+  useEffect(() => {
+    if (session.phase === 'playing' || session.phase === 'over') clearPendingJoin()
+  }, [session.phase])
 
   // Widen the column in-game so the move-history panel sits beside the board on desktop.
   const inGame = session.phase === 'playing' || session.phase === 'over'
