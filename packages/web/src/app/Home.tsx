@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { initialGameState } from '@ctk/engine'
 import { Board } from '../board/Board'
-import { Button, Card, Heading, Stack, Text } from '../ui'
+import { Button, Heading, Stack, Text } from '../ui'
 
 interface HomeProps {
   onPlay: () => void
@@ -56,17 +56,6 @@ export function Home({ onPlay, onCreateInvite, onJoinCode }: HomeProps) {
           </Button>
         </form>
       </Stack>
-
-      <Card>
-        <Stack gap={2}>
-          <Heading level={3}>The king-echo</Heading>
-          <Text size="sm" tone="muted">
-            Castling through danger is legal here — but it leaves a{' '}
-            <span className="text-board-mark">ghost king</span> on the squares your king fled,
-            capturable for one turn. Watch for the pulsing crowns.
-          </Text>
-        </Stack>
-      </Card>
     </Stack>
   )
 }
