@@ -7,6 +7,7 @@ import type {
   ServerToClientEvents,
   SocketData,
 } from '@ctk/protocol'
+import { armFlag } from './clock.js'
 import { createGameRecord, seatColor, snapshotFor } from './game.js'
 import type { GameRecord, GameStore, QueueEntry } from './store.js'
 
@@ -19,6 +20,43 @@ export type AppServer = Server<
 
 // Ambiguity-free alphabet (no O/0/I/1) so codes are easy to read out and type.
 const makeCode = customAlphabet('23456789ABCDEFGHJKLMNPQRSTUVWXYZ', 5)
+
+// How long a lone player waits for an opponent before we give up and dequeue them.
+// Without this an empty lobby means an endless spinner pinning a (billable) instance.
+const QUEUE_TIMEOUT_MS = 90_000
+
+// Per-player matchmaking timers, keyed by uid. Cleared on match, leave, or disconnect.
+const queueTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+/** Cancel a player's pending queue-timeout timer, if any. */
+export function clearQueueTimer(uid: string): void {
+  const timer = queueTimers.get(uid)
+  if (timer) {
+    clearTimeout(timer)
+    queueTimers.delete(uid)
+  }
+}
+
+/** (Re)arm the give-up timer for a lone waiting player. */
+function armQueueTimeout(io: AppServer, store: GameStore, entry: QueueEntry): void {
+  clearQueueTimer(entry.uid)
+  queueTimers.set(
+    entry.uid,
+    setTimeout(() => void fireQueueTimeout(io, store, entry.uid, entry.socketId), QUEUE_TIMEOUT_MS),
+  )
+}
+
+/** No opponent showed up: drop the player from the queue and tell them so. */
+async function fireQueueTimeout(
+  io: AppServer,
+  store: GameStore,
+  uid: string,
+  socketId: string,
+): Promise<void> {
+  queueTimers.delete(uid)
+  await store.queueLeaveByUid(uid)
+  io.to(socketId).emit('queue:timeout')
+}
 
 /** Seat a socket into a game: join the broadcast room and remember the game id. */
 export function seatSocket(io: AppServer, socketId: string | null, gameId: string): void {
@@ -48,20 +86,26 @@ export async function resumeGame(
   io.to(socketId).emit('game:start', snapshotFor(game, color))
 }
 
-/** Create a game from two seated players and emit `game:start` to each. */
+/**
+ * Create a game from two seated players and emit `game:start` to each. `timed`
+ * (public matchmaking) starts a 10:10 chess clock and arms its flag-fall timer;
+ * private invites pass `false` for an untimed game.
+ */
 async function startGame(
   io: AppServer,
   store: GameStore,
   a: QueueEntry,
   b: QueueEntry,
+  timed: boolean,
 ): Promise<void> {
-  const record = createGameRecord(a, b)
+  const record = createGameRecord(a, b, timed)
   await store.createGame(record)
   for (const color of ['w', 'b'] as const) {
     const seat = record.players[color]
     seatSocket(io, seat.socketId, record.id)
     if (seat.socketId) io.to(seat.socketId).emit('game:start', snapshotFor(record, color))
   }
+  armFlag(io, store, record)
 }
 
 /** True and already handled if the player has a live game (bounced back into it). */
@@ -87,12 +131,18 @@ export async function joinQueue(io: AppServer, store: GameStore, entry: QueueEnt
   if (!pair) {
     const position = await store.queuePosition(entry.uid)
     io.to(entry.socketId).emit('queue:waiting', { position })
+    armQueueTimeout(io, store, entry)
     return
   }
-  await startGame(io, store, pair[0], pair[1])
+  // Matched: both players are leaving the queue, so cancel their give-up timers.
+  clearQueueTimer(pair[0].uid)
+  clearQueueTimer(pair[1].uid)
+  // Public matchmaking games are timed (10:10).
+  await startGame(io, store, pair[0], pair[1], true)
 }
 
 export async function leaveQueue(store: GameStore, uid: string): Promise<void> {
+  clearQueueTimer(uid)
   await store.queueLeaveByUid(uid)
 }
 
@@ -106,7 +156,7 @@ export async function createInvite(
   // One game at a time: an in-game host is bounced back; no room, empty code.
   if (await bounceIfInGame(io, store, host)) return ack({ code: '' })
 
-  await store.queueLeaveByUid(host.uid)
+  await leaveQueue(store, host.uid)
   await store.inviteDeleteByHost(host.uid)
   let code = makeCode()
   while (await store.inviteGet(code)) code = makeCode()
@@ -141,6 +191,7 @@ export async function joinInvite(
   if (!claim.ok) return ack({ ok: false, reason: claim.reason })
 
   ack({ ok: true })
-  await store.queueLeaveByUid(joiner.uid)
-  await startGame(io, store, claim.room.host, joiner)
+  await leaveQueue(store, joiner.uid)
+  // Private invite games are untimed.
+  await startGame(io, store, claim.room.host, joiner, false)
 }

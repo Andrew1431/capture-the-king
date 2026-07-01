@@ -1,8 +1,9 @@
 import { createServer } from 'node:http'
 import { Server } from 'socket.io'
-import type { GameOverPayload, HandshakeAuth } from '@ctk/protocol'
+import type { HandshakeAuth } from '@ctk/protocol'
 import { initAuth, verifyToken } from './auth.js'
-import { applyPlayerMove, seatColor } from './game.js'
+import { armFlag, endGame } from './clock.js'
+import { applyPlayerMove, liveClock, seatColor } from './game.js'
 import {
   cancelInvite,
   createInvite,
@@ -12,7 +13,6 @@ import {
   resumeGame,
   type AppServer,
 } from './matchmaking.js'
-import { persistFinishedGame } from './persistence.js'
 import { MemoryStore, type GameRecord } from './store.js'
 
 const PORT = Number(process.env.PORT ?? 8080)
@@ -82,18 +82,6 @@ io.on('connection', async (socket) => {
     return game ?? null
   }
 
-  async function endGame(game: GameRecord, payload: GameOverPayload): Promise<void> {
-    io.to(game.id).emit('game:over', payload)
-    // Persist before teardown; never let a Firestore error abort the game-over flow.
-    try {
-      await persistFinishedGame(game, payload)
-    } catch (err) {
-      console.error(`failed to persist game ${game.id}:`, err)
-    }
-    await store.deleteGame(game.id)
-    io.in(game.id).socketsLeave(game.id)
-  }
-
   socket.on('queue:join', () => {
     void joinQueue(io, store, { uid, name, socketId: socket.id })
   })
@@ -122,8 +110,10 @@ io.on('connection', async (socket) => {
     if ('error' in outcome) return socket.emit('error:msg', { message: outcome.error })
 
     await store.saveGame(game)
-    io.to(game.id).emit('state', { state: game.state, lastMove: game.lastMove })
-    if (outcome.over) await endGame(game, outcome.over)
+    io.to(game.id).emit('state', { state: game.state, lastMove: game.lastMove, clock: liveClock(game) })
+    if (outcome.over) await endGame(io, store, game, outcome.over)
+    // Re-arm the flag for the opponent now on the clock (no-op for untimed games).
+    else armFlag(io, store, game)
   })
 
   socket.on('resign', async () => {
@@ -131,7 +121,7 @@ io.on('connection', async (socket) => {
     if (!game) return
     const color = seatColor(game, uid)
     if (!color || game.state.status !== 'active') return
-    await endGame(game, {
+    await endGame(io, store, game, {
       winner: color === 'w' ? 'b' : 'w',
       reason: 'resign',
       status: color === 'w' ? 'b-wins' : 'w-wins',

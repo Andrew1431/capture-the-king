@@ -6,7 +6,7 @@ import { Waiting } from './app/Waiting'
 import { AccountBar, Login, useAuth } from './auth'
 import { useGameSession } from './net/useGameSession'
 import { cn } from './lib/cn'
-import { Container, Text } from './ui'
+import { Button, Card, Container, Heading, Modal, Stack, Text } from './ui'
 
 // Capture a /join/<code> deep link once at load, before auth/React mount, then
 // strip it from the URL so a refresh doesn't re-trigger the join.
@@ -85,6 +85,24 @@ function GameApp() {
             {error}
           </div>
         </div>
+      )}
+
+      {session.noOpponent && (
+        <Modal onClose={session.dismissNoOpponent}>
+          <Card>
+            <Stack gap={4} align="center" className="text-center">
+              <Stack gap={1} align="center">
+                <Heading level={2}>No one's around</Heading>
+                <Text tone="muted">
+                  It seems like no one is playing right now. Try again in a bit.
+                </Text>
+              </Stack>
+              <Button block onClick={session.dismissNoOpponent}>
+                Back to menu
+              </Button>
+            </Stack>
+          </Card>
+        </Modal>
       )}
     </Container>
   )

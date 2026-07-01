@@ -8,6 +8,18 @@ export interface Seat {
   socketId: string | null
 }
 
+/**
+ * Server-side chess clock for a timed game. `w`/`b` are the milliseconds banked for
+ * each side; the side to move is charged `now - turnStartedAt` on top of its banked
+ * value. null on a GameRecord means an untimed (private) game.
+ */
+export interface Clock {
+  w: number
+  b: number
+  /** When the current turn's clock started ticking (last move, or game start). */
+  turnStartedAt: number
+}
+
 export interface GameRecord {
   id: string
   players: { w: Seat; b: Seat }
@@ -15,6 +27,8 @@ export interface GameRecord {
   lastMove: Move | null
   /** Every move applied, in order — the full replayable history of the game. */
   moves: Move[]
+  /** Chess clock for timed (public) games; null for untimed (private) games. */
+  clock: Clock | null
   createdAt: number
 }
 

@@ -1,3 +1,4 @@
+import { track } from '../analytics'
 import { cn } from '../lib/cn'
 
 const URL = 'https://buymeacoffee.com/andrew1431'
@@ -9,6 +10,7 @@ export function BuyMeACoffeeLink({ className }: { className?: string }) {
       href={URL}
       target="_blank"
       rel="noreferrer"
+      onClick={() => track('link_click', { link: 'buymeacoffee', url: URL })}
       aria-label="Buy me a coffee"
       title="Enjoying it? Buy me a coffee"
       className={cn(

@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react'
 import type { Color, GameState, Move, PieceType } from '@ctk/engine'
-import type { GameOverPayload, GameSnapshot, InviteJoinResult, PlayerInfo } from '@ctk/protocol'
+import type {
+  ClockState,
+  GameOverPayload,
+  GameSnapshot,
+  InviteJoinResult,
+  PlayerInfo,
+} from '@ctk/protocol'
 import { createSocket, type AppSocket } from './socket'
 
 /** Socket connection phase. 'waking' covers scale-to-zero cold starts. */
@@ -17,6 +23,8 @@ export interface ActiveGame {
   lastMove: Move | null
   /** Full ordered move history of this game, for the move list. */
   moves: Move[]
+  /** Chess clock for timed (public) games; null for untimed (private) games. */
+  clock: ClockState | null
 }
 
 /** What to do once the socket connects (it autoConnects lazily on the first action). */
@@ -29,6 +37,8 @@ interface SessionState {
   result: GameOverPayload | null
   inviteCode: string | null
   error: string | null
+  /** True once matchmaking gave up with no opponent — drives the "no one's here" modal. */
+  noOpponent: boolean
 }
 
 const initialState: SessionState = {
@@ -38,6 +48,7 @@ const initialState: SessionState = {
   result: null,
   inviteCode: null,
   error: null,
+  noOpponent: false,
 }
 
 type Action =
@@ -46,8 +57,9 @@ type Action =
   | { type: 'start-invite' }
   | { type: 'invite-code'; code: string }
   | { type: 'start'; snapshot: GameSnapshot }
-  | { type: 'state'; state: GameState; lastMove: Move | null }
+  | { type: 'state'; state: GameState; lastMove: Move | null; clock: ClockState | null }
   | { type: 'over'; result: GameOverPayload }
+  | { type: 'queue-timeout' }
   | { type: 'error'; message: string | null }
   | { type: 'reset' }
 
@@ -56,7 +68,14 @@ function reducer(state: SessionState, action: Action): SessionState {
     case 'conn':
       return { ...state, conn: action.phase }
     case 'start-queue':
-      return { ...state, conn: 'connecting', phase: 'queueing', game: null, result: null }
+      return {
+        ...state,
+        conn: 'connecting',
+        phase: 'queueing',
+        game: null,
+        result: null,
+        noOpponent: false,
+      }
     case 'start-invite':
       return {
         ...state,
@@ -81,6 +100,7 @@ function reducer(state: SessionState, action: Action): SessionState {
           state: action.snapshot.state,
           lastMove: action.snapshot.lastMove,
           moves: action.snapshot.moves,
+          clock: action.snapshot.clock,
         },
       }
     case 'state': {
@@ -89,11 +109,20 @@ function reducer(state: SessionState, action: Action): SessionState {
       const moves = action.lastMove ? [...state.game.moves, action.lastMove] : state.game.moves
       return {
         ...state,
-        game: { ...state.game, state: action.state, lastMove: action.lastMove, moves },
+        game: {
+          ...state.game,
+          state: action.state,
+          lastMove: action.lastMove,
+          moves,
+          clock: action.clock,
+        },
       }
     }
     case 'over':
       return { ...state, phase: 'over', result: action.result }
+    case 'queue-timeout':
+      // Back to home, but flag the modal so the player learns why the search ended.
+      return { ...initialState, conn: state.conn, noOpponent: true }
     case 'error':
       return { ...state, error: action.message }
     case 'reset':
@@ -120,6 +149,7 @@ export interface GameSession extends SessionState {
   resign: () => void
   newGame: () => void
   dismissError: () => void
+  dismissNoOpponent: () => void
 }
 
 export function useGameSession(): GameSession {
@@ -160,8 +190,16 @@ export function useGameSession(): GameSession {
     socket.io.on('reconnect_attempt', () => dispatch({ type: 'conn', phase: 'waking' }))
 
     socket.on('game:start', (snapshot) => dispatch({ type: 'start', snapshot }))
-    socket.on('state', ({ state: s, lastMove }) => dispatch({ type: 'state', state: s, lastMove }))
+    socket.on('state', ({ state: s, lastMove, clock }) =>
+      dispatch({ type: 'state', state: s, lastMove, clock }),
+    )
     socket.on('invite:waiting', ({ code }) => dispatch({ type: 'invite-code', code }))
+    socket.on('queue:timeout', () => {
+      // No opponent found; the server dequeued us. Drop the socket so the idle tab
+      // (now just showing a modal) can't keep a server instance billing.
+      dispatch({ type: 'queue-timeout' })
+      socket.disconnect()
+    })
     socket.on('game:over', (result) => {
       // The result modal needs no live socket — close it now so a lingering
       // "game over" tab can't keep a server instance (and billing) alive.
@@ -245,6 +283,8 @@ export function useGameSession(): GameSession {
 
   const dismissError = useCallback(() => dispatch({ type: 'error', message: null }), [])
 
+  const dismissNoOpponent = useCallback(() => dispatch({ type: 'reset' }), [])
+
   return {
     ...state,
     play,
@@ -255,5 +295,6 @@ export function useGameSession(): GameSession {
     resign,
     newGame,
     dismissError,
+    dismissNoOpponent,
   }
 }

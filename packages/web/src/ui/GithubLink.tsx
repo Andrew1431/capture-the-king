@@ -1,3 +1,4 @@
+import { track } from '../analytics'
 import { cn } from '../lib/cn'
 
 const REPO_URL = 'https://github.com/Andrew1431/capture-the-king'
@@ -9,6 +10,7 @@ export function GithubLink({ className }: { className?: string }) {
       href={REPO_URL}
       target="_blank"
       rel="noreferrer"
+      onClick={() => track('link_click', { link: 'github', url: REPO_URL })}
       aria-label="View source on GitHub"
       title="Open source — view on GitHub"
       className={cn(

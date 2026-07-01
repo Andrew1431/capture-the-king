@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { movesFrom, type Board as BoardArray, type Color, type PieceType } from '@ctk/engine'
+import type { ClockState } from '@ctk/protocol'
 import { Board } from '../board/Board'
 import { PIECE_SVG } from '../board/pieces'
+import { cn } from '../lib/cn'
 import type { GameSession } from '../net/useGameSession'
 import { Button, Card, Heading, Modal, Stack, Text } from '../ui'
 import { MoveHistory } from './MoveHistory'
@@ -57,6 +59,7 @@ export function GameView({ session }: GameViewProps) {
     setSelected(null)
   }, [game?.state])
 
+  const clock = useLiveClock(game?.clock ?? null)
   const myTurn = !!game && game.state.turn === game.color && phase === 'playing'
 
   const targets = useMemo(() => {
@@ -132,7 +135,12 @@ export function GameView({ session }: GameViewProps) {
                 You are {game.color === 'w' ? 'White' : 'Black'}
               </Text>
             </Stack>
-            <TurnPill myTurn={myTurn} active={phase === 'playing'} />
+            <Stack direction="row" align="center" gap={2}>
+              {clock && (
+                <Clock ms={clock[game.color === 'w' ? 'b' : 'w']} running={clock.running === (game.color === 'w' ? 'b' : 'w')} />
+              )}
+              <TurnPill myTurn={myTurn} active={phase === 'playing'} />
+            </Stack>
           </Stack>
 
           <CapturedTray
@@ -163,9 +171,12 @@ export function GameView({ session }: GameViewProps) {
             <Button variant="ghost" size="sm" onClick={resign} disabled={phase !== 'playing'}>
               Resign
             </Button>
-            <Text size="sm" tone="muted">
-              {game.players.w.name} (W) vs {game.players.b.name} (B)
-            </Text>
+            <Stack direction="row" align="center" gap={3}>
+              <Text size="sm" tone="muted" className="hidden sm:block">
+                {game.players.w.name} (W) vs {game.players.b.name} (B)
+              </Text>
+              {clock && <Clock ms={clock[game.color]} running={clock.running === game.color} />}
+            </Stack>
           </Stack>
         </Stack>
 
@@ -241,6 +252,54 @@ function CapturedTray({
   )
 }
 
+/**
+ * Extrapolate a server clock snapshot locally: the `running` side counts down from
+ * the moment its snapshot was received. Re-renders on a 250ms tick only while a side
+ * is actually running; the server remains authoritative for the flag-fall itself.
+ */
+function useLiveClock(clock: ClockState | null): ClockState | null {
+  const [, tick] = useState(0)
+  const receivedAt = useRef(Date.now())
+
+  useEffect(() => {
+    receivedAt.current = Date.now()
+    tick((n) => n + 1)
+  }, [clock])
+
+  useEffect(() => {
+    if (!clock || clock.running == null) return
+    const id = setInterval(() => tick((n) => n + 1), 250)
+    return () => clearInterval(id)
+  }, [clock])
+
+  if (!clock || clock.running == null) return clock
+  const elapsed = Date.now() - receivedAt.current
+  return {
+    w: clock.running === 'w' ? Math.max(0, clock.w - elapsed) : clock.w,
+    b: clock.running === 'b' ? Math.max(0, clock.b - elapsed) : clock.b,
+    running: clock.running,
+  }
+}
+
+/** mm:ss clock chip; gold while running, red under 30s, muted while idle. */
+function Clock({ ms, running }: { ms: number; running: boolean }) {
+  const total = Math.max(0, Math.ceil(ms / 1000))
+  const label = `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
+  const urgent = running && total <= 30
+  return (
+    <span
+      className={cn(
+        'rounded-lg bg-surface-2 px-2.5 py-1 font-mono text-sm font-semibold tabular-nums',
+        !running && 'text-muted',
+        running && !urgent && 'text-brand',
+        urgent && 'text-danger',
+      )}
+    >
+      {label}
+    </span>
+  )
+}
+
 function TurnPill({ myTurn, active }: { myTurn: boolean; active: boolean }) {
   if (!active) return null
   return (
@@ -275,9 +334,13 @@ function OverMessage({
         ? winner === myColor
           ? 'Your opponent resigned.'
           : 'You resigned.'
-        : reason === 'stalemate'
-          ? 'Stalemate — no legal moves.'
-          : 'Game over.'
+        : reason === 'timeout'
+          ? winner === myColor
+            ? 'Your opponent ran out of time.'
+            : 'You ran out of time.'
+          : reason === 'stalemate'
+            ? 'Stalemate — no legal moves.'
+            : 'Game over.'
   return (
     <Stack gap={1} align="center">
       <Heading level={2}>{title}</Heading>
