@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BuyMeACoffeeLink, Button, GithubLink, Text } from '../ui'
+import { BuyMeACoffeeLink, Button, DiscordLink, GithubLink, Text } from '../ui'
 import { AccountMenu } from './AccountMenu'
 import { useAuth } from './AuthProvider'
 
@@ -17,6 +17,7 @@ export function AccountBar() {
       </Text>
       <div className="flex items-center gap-1">
         <BuyMeACoffeeLink />
+        <DiscordLink />
         <GithubLink />
         <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
           Account

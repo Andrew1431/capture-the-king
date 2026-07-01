@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BuyMeACoffeeLink, Button, Card, GithubLink, Heading, Stack, Text } from '../ui'
+import { BuyMeACoffeeLink, Button, Card, DiscordLink, GithubLink, Heading, Stack, Text } from '../ui'
 import { useAuth } from './AuthProvider'
 import { CredentialsForm } from './CredentialsForm'
 
@@ -81,6 +81,7 @@ export function Login() {
 
       <div className="flex justify-center gap-1">
         <BuyMeACoffeeLink />
+        <DiscordLink />
         <GithubLink />
       </div>
     </Stack>
